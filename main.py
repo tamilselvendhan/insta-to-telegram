@@ -126,6 +126,21 @@ def process_feed(feed_url):
 
 def main():
     print("🚀 Instagram → Telegram monitor starting...")
+    
+    current_dir = os.getcwd()
+    print(f"📁 Current directory: {current_dir}")
+    print(f"🗄️ Files in this directory: {os.listdir(current_dir)}")
+    
+    state_file = "insta_state.json"
+    if os.path.exists(state_file):
+        print(f"🟢 Found {state_file}")
+        with open(state_file, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            print(f"📄 {state_file} content:")
+            print(content)
+    else:
+        print(f"🟡 {state_file} not found (will be created)")
+        
     for feed_url in INSTAGRAM_RSS_FEEDS:
         print(f"🔍 Checking feed: {feed_url}")
         try:

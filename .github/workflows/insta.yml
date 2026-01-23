@@ -2,22 +2,22 @@ name: Instagram → Telegram
 
 on:
   schedule:
-    # 8:30 AM and 8:30 PM IST → 3:00 and 15:00 UTC
     - cron: '0 3,15 * * *'
-  workflow_dispatch:  # Manual run from GitHub UI
+  workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: 📦 Checkout code
         uses: actions/checkout@v4
-      
-      - name: 🔄 Restore state file (if exists)
+
+      - name: 🔁 Restore state file
         uses: actions/cache@v3
         with:
           path: insta_state.json
-          key: insta_state-${{ github.sha }}
+          key: insta_state_${{ github.workflow }}_${{ github.sha }}
 
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
@@ -34,9 +34,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      
+
       - name: 💾 Save state file
         uses: actions/cache@v3
         with:
           path: insta_state.json
-          key: insta_state-${{ github.sha }}
+          key: insta_state_${{ github.workflow }}_${{ github.sha }}
