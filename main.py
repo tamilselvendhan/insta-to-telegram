@@ -121,7 +121,7 @@ def process_feed(feed_url):
 
     # Save the newest post's ID as last seen
     if new_items:
-        state[feed_id] = new_items[0]["id"]
+        state[feed_id] = new_items["id"]
         save_state(state)
 
 def main():

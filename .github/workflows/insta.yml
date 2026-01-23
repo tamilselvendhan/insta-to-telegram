@@ -12,6 +12,12 @@ jobs:
     steps:
       - name: 📦 Checkout code
         uses: actions/checkout@v4
+      
+      - name: 🔄 Restore state file (if exists)
+        uses: actions/cache@v3
+        with:
+          path: insta_state.json
+          key: insta_state-${{ github.sha }}
 
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
@@ -28,3 +34,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      
+      - name: 💾 Save state file
+        uses: actions/cache@v3
+        with:
+          path: insta_state.json
+          key: insta_state-${{ github.sha }}
