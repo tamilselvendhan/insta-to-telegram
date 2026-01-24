@@ -120,8 +120,12 @@ def process_feed(feed_url):
             send_telegram_message(msg)
 
     # Save the newest post's ID as last seen
+    # if new_items:
+    #     state[feed_id] = new_items["id"]
+    #     save_state(state)
     if new_items:
-        state[feed_id] = new_items["id"]
+        latest_time = max(item["published"] for item in new_items)
+        state[feed_url] = latest_time
         save_state(state)
 
 def main():
