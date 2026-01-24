@@ -5,7 +5,6 @@ import time as time_module
 import json
 import os
 from urllib.parse import quote
-import hashlib
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -54,13 +53,9 @@ def send_telegram_message(text):
     except Exception as e:
         print(f"❌ Telegram send failed: {e}")
 
-def get_feed_id(feed_url):
-    return hashlib.md5(feed_url.encode()).hexdigest()[:8]
-
 def process_feed(feed_url):
     state = load_state()
-    feed_id = get_feed_id(feed_url)
-    last_seen_id = state.get(feed_id)
+    last_seen_id = state.get(feed_url)
 
     # Use a real browser-like User-Agent
     headers = {
@@ -84,18 +79,14 @@ def process_feed(feed_url):
     for entry in feed.entries:
         try:
             # Use link as primary ID, fallback to guid, then a timestamp-based ID
-            entry_id = (
-                entry.get("link")
-                or entry.get("guid")
-                or f"{entry.get('title', 'no-title')}-{entry.get('published', 'no-date')}"
-            )
+            entry_id = entry.get('published')
             published_parsed = entry.get("published_parsed")
             if published_parsed is None:
                 continue
             entry_timestamp = time_module.mktime(published_parsed)
 
             # If we already saw this post, stop here (no need to go back)
-            if last_seen_id is not None and entry_id == last_seen_id:
+            if last_seen_id is not None and entry_timestamp == last_seen_id:
                 break
 
             # Otherwise, it's new
@@ -117,7 +108,8 @@ def process_feed(feed_url):
     for item in new_items:
         if item["link"]:
             msg = f"New Instagram post:\n{item['link']}"
-            send_telegram_message(msg)
+            # send_telegram_message(msg)
+            print("Sending telegram message")
 
     # Save the newest post's ID as last seen
     # if new_items:
