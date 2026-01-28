@@ -2,7 +2,8 @@ name: Instagram → Telegram
 
 on:
   schedule:
-    - cron: '0 3,15 * * *'
+    # - cron: '0 3,15 * * *'
+    - cron: '*/5 * * * *' 
   workflow_dispatch:
 
 jobs:
@@ -17,7 +18,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: insta_state.json
-          key: insta_state_${{ github.workflow }}_${{ github.sha }}
+          key: insta_state_${{ github.workflow }}
 
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
