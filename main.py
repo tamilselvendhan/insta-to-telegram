@@ -1,13 +1,15 @@
-import instaloader
 import os
-from datetime import datetime, timedelta
 import requests
+import json
+from datetime import datetime, timedelta
+import re
 
 # Configuration
-USERNAMES_TO_TRACK = ['salemland_promoters']  # Add usernames here
+USERNAMES_TO_TRACK = ['salemland_promoters']
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
-CHECK_HOURS = 12  # Only notify if post is less than 12 hours old
+CHECK_HOURS = 12
+STATE_FILE = 'last_posts.json'
 
 def send_telegram_message(message):
     """Send notification via Telegram"""
@@ -21,72 +23,136 @@ def send_telegram_message(message):
     try:
         response = requests.post(url, json=data)
         response.raise_for_status()
+        print("Telegram message sent successfully")
     except Exception as e:
         print(f"Failed to send Telegram message: {e}")
 
+def load_state():
+    """Load the last checked post shortcodes"""
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_state(state):
+    """Save the current post shortcodes"""
+    with open(STATE_FILE, 'w') as f:
+        json.dump(state, f, indent=2)
+
+def get_instagram_posts(username):
+    """Scrape Instagram profile page directly"""
+    url = f"https://www.instagram.com/{username}/"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'max-age=0'
+    }
+    
+    try:
+        print(f"Fetching {url}...")
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        # Extract JSON data from page
+        pattern = r'<script type="application/ld\+json">({.*?})</script>'
+        matches = re.findall(pattern, response.text, re.DOTALL)
+        
+        posts = []
+        for match in matches:
+            try:
+                data = json.loads(match)
+                if isinstance(data, dict) and '@type' in data:
+                    # Look for post data
+                    if 'articleBody' in data or 'image' in data:
+                        posts.append(data)
+            except:
+                continue
+        
+        # Also try to extract shortcodes from the page
+        shortcode_pattern = r'"/p/([A-Za-z0-9_-]+)/"'
+        shortcodes = re.findall(shortcode_pattern, response.text)
+        
+        # Remove duplicates and get first 3
+        unique_shortcodes = list(dict.fromkeys(shortcodes))[:3]
+        
+        return unique_shortcodes
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Instagram page: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return []
+
 def check_new_posts():
     """Check for new posts from tracked users"""
-    L = instaloader.Instaloader()
-    
-    # Login to Instagram (optional but recommended)
-    instagram_username = os.environ.get('INSTAGRAM_USERNAME')
-    instagram_password = os.environ.get('INSTAGRAM_PASSWORD')
-    
-    if instagram_username and instagram_password:
-        try:
-            L.load_session_from_file(instagram_username)
-            print("Loaded session from file")
-        except:
-            print("Logging in to Instagram...")
-            L.login(instagram_username, instagram_password)
-            L.save_session_to_file()
-            print("Logged in successfully")
-    
+    state = load_state()
     new_posts_found = False
-    cutoff_time = datetime.now() - timedelta(hours=CHECK_HOURS)
     
     for username in USERNAMES_TO_TRACK:
-        try:
-            print(f"Checking {username}...")
-            profile = instaloader.Profile.from_username(L.context, username)
-            
-            # Get recent posts (check last 3 to be safe)
-            posts = list(profile.get_posts())[:3]
-            
-            for post in posts:
-                # Only notify if post is recent (within CHECK_HOURS)
-                if post.date_local > cutoff_time:
-                    new_posts_found = True
-                    post_url = f"https://www.instagram.com/p/{post.shortcode}/"
-                    
-                    # Calculate how long ago
-                    time_ago = datetime.now() - post.date_local
-                    hours_ago = int(time_ago.total_seconds() / 3600)
-                    
-                    if hours_ago < 1:
-                        time_str = f"{int(time_ago.total_seconds() / 60)} minutes ago"
-                    else:
-                        time_str = f"{hours_ago} hours ago"
-                    
-                    message = f"""
+        print(f"\nChecking {username}...")
+        
+        shortcodes = get_instagram_posts(username)
+        
+        if not shortcodes:
+            print(f"Could not fetch posts for {username}")
+            continue
+        
+        print(f"Found {len(shortcodes)} posts")
+        
+        # Get the last known shortcode for this user
+        last_known = state.get(username)
+        
+        # Check if there are new posts
+        if not last_known:
+            # First time checking this user
+            print(f"First time checking {username}, saving latest post")
+            state[username] = shortcodes[0]
+            new_posts_found = True
+            latest_shortcode = shortcodes[0]
+        elif shortcodes[0] != last_known:
+            # New post detected
+            print(f"New post detected for {username}!")
+            new_posts_found = True
+            latest_shortcode = shortcodes[0]
+            state[username] = latest_shortcode
+        else:
+            print(f"No new posts for {username}")
+            continue
+        
+        # Send notification
+        post_url = f"https://www.instagram.com/p/{latest_shortcode}/"
+        
+        message = f"""
 🔔 <b>New post from @{username}</b>
 
-⏰ Posted {time_str}
-❤️ {post.likes} likes
-💬 {post.comments} comments
-
 {post_url}
-                    """.strip()
-                    
-                    send_telegram_message(message)
-                    print(f"Notified about post from {username} ({time_str})")
-                
-        except Exception as e:
-            print(f"Error checking {username}: {e}")
-            continue
+
+Tap to view on Instagram
+        """.strip()
+        
+        send_telegram_message(message)
+    
+    # Save updated state
+    save_state(state)
     
     if not new_posts_found:
-        print(f"No posts in the last {CHECK_HOURS} hours from any tracked users")
+        print("\nNo new posts from any tracked users")
+    else:
+        print("\n✓ Notifications sent!")
 
 if __name__ == "__main__":
+    print("=" * 50)
+    print("Instagram Monitor Starting...")
+    print("=" * 50)
     check_new_posts()
+    print("=" * 50)
+    print("Done!")
