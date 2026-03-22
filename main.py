@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import requests
 
 # Configuration
-USERNAMES_TO_TRACK = ['salemland_promoters']  # Add usernames here
+USERNAMES_TO_TRACK = ['salemland_promotoers']  # Add usernames here
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 CHECK_HOURS = 12  # Only notify if post is less than 12 hours old
@@ -27,6 +27,20 @@ def send_telegram_message(message):
 def check_new_posts():
     """Check for new posts from tracked users"""
     L = instaloader.Instaloader()
+    
+    # Login to Instagram (optional but recommended)
+    instagram_username = os.environ.get('INSTAGRAM_USERNAME')
+    instagram_password = os.environ.get('INSTAGRAM_PASSWORD')
+    
+    if instagram_username and instagram_password:
+        try:
+            L.load_session_from_file(instagram_username)
+            print("Loaded session from file")
+        except:
+            print("Logging in to Instagram...")
+            L.login(instagram_username, instagram_password)
+            L.save_session_to_file()
+            print("Logged in successfully")
     
     new_posts_found = False
     cutoff_time = datetime.now() - timedelta(hours=CHECK_HOURS)
