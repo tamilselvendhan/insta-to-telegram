@@ -1,26 +1,13 @@
 import instaloader
-import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 
 # Configuration
-USERNAMES_TO_TRACK = ['salemland_promotors']
+USERNAMES_TO_TRACK = ['salemland_promoters']  # Add usernames here
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
-STATE_FILE = 'last_posts.json'
-
-def load_state():
-    """Load the last checked post IDs"""
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_state(state):
-    """Save the current post IDs"""
-    with open(STATE_FILE, 'w') as f:
-        json.dump(state, f, indent=2)
+CHECK_HOURS = 12  # Only notify if post is less than 12 hours old
 
 def send_telegram_message(message):
     """Send notification via Telegram"""
@@ -41,57 +28,51 @@ def check_new_posts():
     """Check for new posts from tracked users"""
     L = instaloader.Instaloader()
     
-    # Load previous state
-    state = load_state()
     new_posts_found = False
+    cutoff_time = datetime.now() - timedelta(hours=CHECK_HOURS)
     
     for username in USERNAMES_TO_TRACK:
         try:
             print(f"Checking {username}...")
             profile = instaloader.Profile.from_username(L.context, username)
             
-            # Get the most recent post
-            posts = profile.get_posts()
-            latest_post = next(posts, None)
+            # Get recent posts (check last 3 to be safe)
+            posts = list(profile.get_posts())[:3]
             
-            if not latest_post:
-                continue
-            
-            latest_post_id = latest_post.shortcode
-            last_known_id = state.get(username)
-            
-            # Check if this is a new post
-            if last_known_id != latest_post_id:
-                new_posts_found = True
-                post_url = f"https://www.instagram.com/p/{latest_post_id}/"
-                
-                message = f"""
+            for post in posts:
+                # Only notify if post is recent (within CHECK_HOURS)
+                if post.date_local > cutoff_time:
+                    new_posts_found = True
+                    post_url = f"https://www.instagram.com/p/{post.shortcode}/"
+                    
+                    # Calculate how long ago
+                    time_ago = datetime.now() - post.date_local
+                    hours_ago = int(time_ago.total_seconds() / 3600)
+                    
+                    if hours_ago < 1:
+                        time_str = f"{int(time_ago.total_seconds() / 60)} minutes ago"
+                    else:
+                        time_str = f"{hours_ago} hours ago"
+                    
+                    message = f"""
 🔔 <b>New post from @{username}</b>
 
-📅 {latest_post.date_local.strftime('%Y-%m-%d %I:%M %p')}
-❤️ {latest_post.likes} likes
-💬 {latest_post.comments} comments
+⏰ Posted {time_str}
+❤️ {post.likes} likes
+💬 {post.comments} comments
 
 {post_url}
-                """.strip()
-                
-                send_telegram_message(message)
-                
-                # Update state
-                state[username] = latest_post_id
-                print(f"New post found for {username}")
-            else:
-                print(f"No new posts for {username}")
+                    """.strip()
+                    
+                    send_telegram_message(message)
+                    print(f"Notified about post from {username} ({time_str})")
                 
         except Exception as e:
             print(f"Error checking {username}: {e}")
             continue
     
-    # Save updated state
-    save_state(state)
-    
     if not new_posts_found:
-        print("No new posts from any tracked users")
+        print(f"No posts in the last {CHECK_HOURS} hours from any tracked users")
 
 if __name__ == "__main__":
     check_new_posts()
