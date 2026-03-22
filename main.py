@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import requests
 
 # Configuration
-USERNAMES_TO_TRACK = ['salemland_promotoers']  # Add usernames here
+USERNAMES_TO_TRACK = ['salemland_promoters']  # Add usernames here
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 CHECK_HOURS = 12  # Only notify if post is less than 12 hours old
